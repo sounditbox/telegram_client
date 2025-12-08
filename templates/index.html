@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Web Client</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .user-info .avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        
+        /* Кастомные стили для кнопок с градиентом */
+        .btn-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        
+        .btn-gradient:active {
+            transform: translateY(0);
+        }
+        
+        .dialogs-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .dialog-item {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .dialog-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .dialog-item .title {
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 5px;
+        }
+        
+        .dialog-item .meta {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        
+        /* Стили для чата (как в Telegram) */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .chat-header h3 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        
+        .chat-header .chat-info {
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .chat-message {
+            display: flex;
+            flex-direction: column;
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 12px;
+            word-wrap: break-word;
+        }
+        
+        .chat-message.sent {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .chat-message.received {
+            align-self: flex-start;
+            background: white;
+            color: #212529;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        
+        .chat-message .message-sender {
+            font-weight: 600;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+        
+        .chat-message.sent .message-sender {
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .chat-message.received .message-sender {
+            color: #667eea;
+        }
+        
+        .chat-message .message-text {
+            line-height: 1.4;
+            margin-bottom: 5px;
+        }
+        
+        .chat-message .message-date {
+            font-size: 0.75em;
+            opacity: 0.7;
+            text-align: right;
+        }
+        
+        .chat-input-area {
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .chat-input-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-input-wrapper textarea {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #dee2e6;
+            border-radius: 20px;
+            resize: none;
+            font-size: 14px;
+            font-family: inherit;
+            min-height: 44px;
+            max-height: 120px;
+        }
+        
+        .chat-input-wrapper textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .chat-send-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: transform 0.2s;
+            min-width: 80px;
+        }
+        
+        .chat-send-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .chat-send-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .message-item {
+            border-left: 3px solid #667eea;
+        }
+        
+        .event-item {
+            border-left: 3px solid #28a745;
+        }
+        
+        .event-item.message_edited {
+            border-left-color: #ffc107;
+        }
+        
+        /* Стили для toast-уведомлений */
+        .toast-container {
+            max-width: 350px;
+        }
+        
+        .toast {
+            min-width: 300px;
+            margin-bottom: 10px;
+        }
+        
+        .auth-step {
+            display: none;
+        }
+        
+        .auth-step.active {
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header">
+            <h1>📱 Telegram Web Client</h1>
+            <p>Управление Telegram через Telethon и FastAPI</p>
+        </div>
+        
+        <div class="user-info bg-light p-3 border-bottom d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-3">
+                <div class="avatar" id="userAvatar">?</div>
+                <div>
+                    <div id="userName" class="fw-bold">Загрузка...</div>
+                    <div class="text-muted small" id="userUsername"></div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-secondary" onclick="loadDialogs()">🔄 Обновить</button>
+                <button class="btn btn-danger" onclick="logoutTelegram()" title="Выйти из текущего Telegram аккаунта">🚪 Выйти из Telegram</button>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="section card">
+                <div class="card-body">
+                    <h2 class="card-title">💬 Диалоги</h2>
+                    <div id="dialogsList" class="dialogs-list list-group">
+                        <div class="text-center text-muted p-4">Загрузка диалогов...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section card" style="grid-column: 2; grid-row: 1 / 3;">
+                <div class="card-body p-0 d-flex flex-column" style="height: 100%;">
+                    <h2 class="card-title p-3 mb-0">💬 Чат</h2>
+                    <div class="chat-container">
+                        <div class="chat-header">
+                            <h3 id="chatTitle" class="mb-1">Выберите чат</h3>
+                            <div class="chat-info" id="chatInfo"></div>
+                        </div>
+                        
+                        <div id="chatMessages" class="chat-messages">
+                            <div class="text-center text-muted m-auto">
+                                Выберите чат из списка слева для начала переписки
+                            </div>
+                        </div>
+                        
+                        <div class="chat-input-area">
+                            <div class="chat-input-wrapper">
+                                <textarea 
+                                    id="messageText" 
+                                    class="form-control"
+                                    placeholder="Введите сообщение..." 
+                                    rows="1"
+                                    onkeydown="handleChatKeyDown(event)"
+                                    style="display: none;"
+                                ></textarea>
+                            </div>
+                            <button 
+                                type="button" 
+                                class="chat-send-btn btn btn-gradient" 
+                                id="sendMessageBtn"
+                                onclick="sendMessageFromChat()"
+                                style="display: none;"
+                            >
+                                Отправить
+                            </button>
+                        </div>
+                    </div>
+                    <div id="sendStatus" class="mt-2"></div>
+                </div>
+            </div>
+            
+            <!-- Скрытые поля для совместимости -->
+            <input type="hidden" id="chatId">
+            <input type="hidden" id="messagesChatId">
+        </div>
+    </div>
+    
+    <!-- Контейнер для toast-уведомлений -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11;">
+        <!-- Toast будут добавляться динамически -->
+    </div>
+    
+    <!-- Модальное окно авторизации -->
+
+    <!-- Модальное окно авторизации -->
+    <div class="modal fade" id="authModal" tabindex="-1" aria-labelledby="authModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="authModalLabel">🔐 Авторизация в Telegram</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-3">Войдите в свой аккаунт Telegram</p>
+
+                    <div id="authStatus"></div>
+
+                    <!-- Шаг 1: Ввод номера телефона -->
+                    <div id="stepPhone" class="auth-step active">
+                        <form onsubmit="sendAuthCode(event)">
+                            <div class="mb-3">
+                                <label for="phoneInput" class="form-label">Номер телефона:</label>
+                                <input
+                                    type="tel"
+                                    class="form-control"
+                                    id="phoneInput"
+                                    placeholder="+7XXXXXXXXXX"
+                                    required
+                                    pattern="\+[0-9]{10,15}"
+                                >
+                                <small class="form-text text-muted">
+                                    Формат: +7XXXXXXXXXX (с кодом страны)
+                                </small>
+                            </div>
+                            <button type="submit" class="btn btn-gradient w-100">Отправить код</button>
+                        </form>
+                    </div>
+
+                    <!-- Шаг 2: Ввод кода подтверждения -->
+                    <div id="stepCode" class="auth-step">
+                        <form onsubmit="signIn(event)">
+                            <div class="mb-3">
+                                <label for="codeInput" class="form-label">Код подтверждения:</label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="codeInput"
+                                    placeholder="12345"
+                                    required
+                                    maxlength="10"
+                                >
+                                <small class="form-text text-muted">
+                                    Введите код, который пришел в Telegram
+                                </small>
+                            </div>
+
+                            <!-- Поле для пароля (показывается если требуется) -->
+                            <div id="passwordGroup" class="mb-3 d-none">
+                                <label for="passwordInput" class="form-label">Пароль двухфакторной аутентификации:</label>
+                                <input
+                                    type="password"
+                                    class="form-control"
+                                    id="passwordInput"
+                                    placeholder="Введите пароль"
+                                >
+                            </div>
+
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-secondary flex-fill" onclick="resetAuth()">Назад</button>
+                                <button type="button" id="resendCodeBtn" class="btn btn-outline-secondary" onclick="resendCode()" style="display: none;">🔄 Отправить код повторно</button>
+                                <button type="submit" class="btn btn-gradient flex-fill">Войти</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authStep = 'phone'; // 'phone' или 'code'
+        
+        // Проверка статуса авторизации при загрузке
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch('/api/auth/status');
+                const data = await response.json();
+                
+                if (data.authenticated && data.user) {
+                    // Пользователь авторизован, скрываем модальное окно
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('authModal'));
+                    if (modal) modal.hide();
+                    loadUserInfo();
+                    loadDialogs();
+                    // Инициализируем отслеживание событий для toast
+                    setTimeout(() => checkNewEvents(), 2000);
+                } else {
+                    // Пользователь не авторизован, показываем модальное окно
+                    const modal = new bootstrap.Modal(document.getElementById('authModal'));
+                    modal.show();
+                }
+            } catch (error) {
+                console.error('Ошибка проверки статуса авторизации:', error);
+                const modal = new bootstrap.Modal(document.getElementById('authModal'));
+                modal.show();
+            }
+        }
+        
+        // Отправка кода подтверждения
+        async function sendAuthCode(event, resend = false) {
+            if (event) event.preventDefault();
+            const statusDiv = document.getElementById('authStatus');
+            const phone = document.getElementById('phoneInput').value;
+            
+            statusDiv.innerHTML = '<div class="alert alert-info">Отправка кода...</div>';
+            document.getElementById('resendCodeBtn').style.display = 'none';
+            
+            try {
+                const formData = new FormData();
+                formData.append('phone', phone);
+                if (resend) {
+                    formData.append('resend', 'true');
+                }
+                
+                const response = await fetch('/api/auth/send-code', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    statusDiv.innerHTML = `<div class="alert alert-success">✅ ${data.message || 'Код отправлен'}! Проверьте Telegram.</div>`;
+                    // Переходим к шагу ввода кода
+                    document.getElementById('stepPhone').classList.remove('active');
+                    document.getElementById('stepCode').classList.add('active');
+                    authStep = 'code';
+                    document.getElementById('codeInput').focus();
+                    // Показываем кнопку повторной отправки
+                    document.getElementById('resendCodeBtn').style.display = 'inline-block';
+                } else if (data.can_resend) {
+                    // Можно отправить код повторно
+                    statusDiv.innerHTML = `<div class="alert alert-danger">❌ ${data.message || data.detail}</div>`;
+                    document.getElementById('resendCodeBtn').style.display = 'inline-block';
+                    // Переходим к шагу ввода кода, если еще не перешли
+                    if (authStep === 'phone') {
+                        document.getElementById('stepPhone').classList.remove('active');
+                        document.getElementById('stepCode').classList.add('active');
+                        authStep = 'code';
+                    }
+                } else {
+                    throw new Error(data.detail || data.message || 'Ошибка при отправке кода');
+                }
+            } catch (error) {
+                let errorMsg = error.message;
+                // Проверяем, можно ли отправить код повторно
+                if (errorMsg.includes('all available options') || errorMsg.includes('resend') || errorMsg.includes('ResendCode')) {
+                    statusDiv.innerHTML = `<div class="alert alert-danger">❌ Все варианты отправки кода использованы.<br><small>Используйте кнопку "Отправить код повторно"</small></div>`;
+                    document.getElementById('resendCodeBtn').style.display = 'inline-block';
+                    // Переходим к шагу ввода кода, если еще не перешли
+                    if (authStep === 'phone') {
+                        document.getElementById('stepPhone').classList.remove('active');
+                        document.getElementById('stepCode').classList.add('active');
+                        authStep = 'code';
+                    }
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-danger">❌ ${errorMsg}</div>`;
+                }
+            }
+        }
+        
+        // Повторная отправка кода
+        function resendCode() {
+            sendAuthCode(null, true);
+        }
+        
+        // Вход с кодом
+        async function signIn(event) {
+            event.preventDefault();
+            const statusDiv = document.getElementById('authStatus');
+            const code = document.getElementById('codeInput').value;
+            const password = document.getElementById('passwordInput').value || null;
+            
+            statusDiv.innerHTML = '<div class="alert alert-info">Авторизация...</div>';
+            
+            try {
+                const formData = new FormData();
+                formData.append('code', code);
+                if (password) {
+                    formData.append('password', password);
+                }
+                
+                const response = await fetch('/api/auth/sign-in', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    statusDiv.innerHTML = '<div class="alert alert-success">✅ Успешная авторизация!</div>';
+                    setTimeout(() => {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('authModal'));
+                        if (modal) modal.hide();
+                        location.reload();
+                    }, 1000);
+                } else {
+                    const errorMsg = data.detail || 'Ошибка авторизации';
+                    
+                    // Проверяем, требуется ли пароль
+                    if (errorMsg.includes('пароль') || errorMsg.includes('password')) {
+                        document.getElementById('passwordGroup').classList.remove('d-none');
+                        document.getElementById('passwordInput').required = true;
+                        statusDiv.innerHTML = '<div class="alert alert-info">ℹ️ Требуется пароль двухфакторной аутентификации</div>';
+                    } else {
+                        throw new Error(errorMsg);
+                    }
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="alert alert-danger">❌ ${error.message}</div>`;
+            }
+        }
+        
+        // Сброс авторизации (вернуться к вводу телефона)
+        function resetAuth() {
+            document.getElementById('stepCode').classList.remove('active');
+            document.getElementById('stepPhone').classList.add('active');
+            document.getElementById('codeInput').value = '';
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('passwordGroup').classList.add('d-none');
+            document.getElementById('passwordInput').required = false;
+            document.getElementById('resendCodeBtn').style.display = 'none';
+            document.getElementById('authStatus').innerHTML = '';
+            authStep = 'phone';
+        }
+        
+        // Загрузка информации о пользователе
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('/api/me');
+                const data = await response.json();
+                if (data.status === 'success') {
+                    const user = data.data;
+                    document.getElementById('userName').textContent = 
+                        `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Пользователь';
+                    document.getElementById('userUsername').textContent = 
+                        user.username ? `@${user.username}` : '';
+                    document.getElementById('userAvatar').textContent = 
+                        (user.first_name || 'U')[0].toUpperCase();
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки информации о пользователе:', error);
+            }
+        }
+        
+        // Загрузка диалогов
+        async function loadDialogs() {
+            const dialogsList = document.getElementById('dialogsList');
+            dialogsList.innerHTML = '<div class="text-center text-muted p-4">Загрузка диалогов...</div>';
+            
+            try {
+                const response = await fetch('/api/dialogs?limit=50');
+                const data = await response.json();
+                if (data.status === 'success') {
+                    if (data.data.length === 0) {
+                        dialogsList.innerHTML = '<div class="text-center text-muted p-4">Нет диалогов</div>';
+                        return;
+                    }
+                    
+                    dialogsList.innerHTML = data.data.map(dialog => {
+                        // Используем username если есть, иначе ID
+                        const chatIdentifier = dialog.username ? `@${dialog.username}` : dialog.id.toString();
+                        const displayMeta = dialog.username ? `@${dialog.username}` : `ID: ${dialog.id}`;
+                        // Безопасно обрабатываем title (может быть null или undefined)
+                        const title = dialog.title || 'Без названия';
+                        const safeTitle = title.replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                        const safeUsername = (dialog.username || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                        return `
+                        <div class="dialog-item list-group-item list-group-item-action" 
+                             onclick="selectDialog('${chatIdentifier}', '${safeTitle}', '${safeUsername}', '${dialog.id}')">
+                            <div class="title fw-bold">${title}</div>
+                            <div class="meta small text-muted">
+                                ${displayMeta} | 
+                                ${dialog.is_channel ? 'Канал' : dialog.is_group ? 'Группа' : 'Пользователь'}
+                                ${dialog.unread_count > 0 ? ` | Непрочитано: ${dialog.unread_count}` : ''}
+                            </div>
+                        </div>
+                    `;
+                    }).join('');
+                }
+            } catch (error) {
+                dialogsList.innerHTML = `<div class="alert alert-danger">Ошибка: ${error.message}</div>`;
+            }
+        }
+        
+        // Текущий выбранный чат
+        let currentChat = {
+            id: null,
+            identifier: null,
+            title: null,
+            username: null
+        };
+        
+        // Выбор диалога
+        async function selectDialog(chatIdentifier, title, username, id) {
+            // Сохраняем информацию о текущем чате
+            currentChat = {
+                id: id,
+                identifier: chatIdentifier,
+                title: title,
+                username: username
+            };
+            
+            // Обновляем заголовок чата
+            document.getElementById('chatTitle').textContent = title;
+            const chatInfo = username ? `@${username}` : `ID: ${id}`;
+            document.getElementById('chatInfo').textContent = chatInfo;
+            
+            // Показываем форму ввода
+            document.getElementById('messageText').style.display = 'block';
+            document.getElementById('sendMessageBtn').style.display = 'block';
+            
+            // Очищаем статус
+            document.getElementById('sendStatus').innerHTML = '';
+            
+            // Отмечаем сообщения как прочитанные
+            try {
+                await fetch(`/api/chats/${chatIdentifier}/mark-read`, {
+                    method: 'POST'
+                });
+                // Обновляем список диалогов, чтобы убрать счетчик непрочитанных
+                loadDialogs();
+            } catch (error) {
+                console.error('Ошибка при отметке сообщений как прочитанных:', error);
+            }
+            
+            // Загружаем сообщения
+            loadChatMessages(chatIdentifier);
+        }
+        
+        // Отправка сообщения из чата (новая функция)
+        async function sendMessageFromChat() {
+            if (!currentChat.identifier) {
+                alert('Выберите чат из списка');
+                return;
+            }
+            
+            const messageText = document.getElementById('messageText');
+            const message = messageText.value.trim();
+            
+            if (!message) {
+                return;
+            }
+            
+            const statusDiv = document.getElementById('sendStatus');
+            statusDiv.innerHTML = '';
+            
+            try {
+                const formData = new FormData();
+                formData.append('chat_id', currentChat.identifier);
+                formData.append('message', message);
+                
+                const response = await fetch('/api/send-message-form', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || data.message || 'Ошибка отправки');
+                }
+                
+                if (data.status === 'success') {
+                    // Очищаем поле ввода
+                    messageText.value = '';
+                    // Автоматически подстраиваем высоту textarea
+                    messageText.style.height = 'auto';
+                    
+                    // Перезагружаем сообщения для отображения нового
+                    await loadChatMessages(currentChat.identifier);
+                } else {
+                    throw new Error(data.detail || 'Ошибка отправки');
+                }
+            } catch (error) {
+                let errorMessage = error.message;
+                if (errorMessage.includes('Cannot find any entity') || 
+                    errorMessage.includes('Не удалось найти')) {
+                    errorMessage = `Не удалось найти чат "${currentChat.identifier}". Проверьте правильность ID или username.`;
+                }
+                statusDiv.innerHTML = `<div class="alert alert-danger">❌ ${errorMessage}</div>`;
+            }
+        }
+        
+        // Обработка нажатия клавиш в поле ввода чата
+        function handleChatKeyDown(event) {
+            // Enter отправляет сообщение, Shift+Enter - новая строка
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessageFromChat();
+            }
+            
+            // Автоматическое изменение высоты textarea
+            const textarea = event.target;
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+        }
+        
+        // Старая функция sendMessage (для совместимости)
+        async function sendMessage(event) {
+            if (event) event.preventDefault();
+            // Если чат выбран, используем новую функцию
+            if (currentChat.identifier) {
+                sendMessageFromChat();
+            }
+        }
+        
+        // Загрузка сообщений в чат (новый формат как в Telegram)
+        async function loadChatMessages(chatId) {
+            if (!chatId) {
+                return;
+            }
+            
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '<div class="text-center text-muted m-auto">Загрузка сообщений...</div>';
+            
+            try {
+                const response = await fetch(`/api/chats/${chatId}/messages?limit=50`);
+                const data = await response.json();
+                if (data.status === 'success') {
+                    if (data.data.length === 0) {
+                        chatMessages.innerHTML = '<div class="text-center text-muted m-auto">Нет сообщений в этом чате</div>';
+                        return;
+                    }
+                    
+                    // Получаем информацию о текущем пользователе для определения своих сообщений
+                    const meResponse = await fetch('/api/me');
+                    const meData = await meResponse.json();
+                    const currentUserId = meData.status === 'success' ? meData.data.id : null;
+                    
+                    // Отображаем сообщения в обратном порядке (новые внизу)
+                    chatMessages.innerHTML = data.data.reverse().map(msg => {
+                        const isSent = currentUserId && msg.sender_id === currentUserId;
+                        const messageClass = isSent ? 'sent' : 'received';
+                        const date = msg.date ? new Date(msg.date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+                        
+                        return `
+                            <div class="chat-message ${messageClass}">
+                                ${!isSent ? `<div class="message-sender">${escapeHtml(msg.sender_name || 'Неизвестно')}</div>` : ''}
+                                <div class="message-text">${escapeHtml(msg.text)}</div>
+                                <div class="message-date">${date}</div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    // Прокручиваем вниз к последнему сообщению
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            } catch (error) {
+                chatMessages.innerHTML = `<div class="alert alert-danger text-center m-auto">Ошибка: ${error.message}</div>`;
+            }
+        }
+        
+        // Функция для экранирования HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Отправка сообщения из чата
+        async function sendMessageFromChat() {
+            if (!currentChat.identifier) {
+                alert('Выберите чат из списка');
+                return;
+            }
+            
+            const messageText = document.getElementById('messageText');
+            const message = messageText.value.trim();
+            
+            if (!message) {
+                return;
+            }
+            
+            const statusDiv = document.getElementById('sendStatus');
+            statusDiv.innerHTML = '';
+            
+            try {
+                const formData = new FormData();
+                formData.append('chat_id', currentChat.identifier);
+                formData.append('message', message);
+                
+                const response = await fetch('/api/send-message-form', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || data.message || 'Ошибка отправки');
+                }
+                
+                if (data.status === 'success') {
+                    // Очищаем поле ввода
+                    messageText.value = '';
+                    // Автоматически подстраиваем высоту textarea
+                    messageText.style.height = 'auto';
+                    
+                    // Перезагружаем сообщения для отображения нового
+                    await loadChatMessages(currentChat.identifier);
+                } else {
+                    throw new Error(data.detail || 'Ошибка отправки');
+                }
+            } catch (error) {
+                let errorMessage = error.message;
+                if (errorMessage.includes('Cannot find any entity') || 
+                    errorMessage.includes('Не удалось найти')) {
+                    errorMessage = `Не удалось найти чат "${currentChat.identifier}". Проверьте правильность ID или username.`;
+                }
+                statusDiv.innerHTML = `<div class="alert alert-danger">❌ ${errorMessage}</div>`;
+            }
+        }
+        
+        // Обработка нажатия клавиш в поле ввода чата
+        function handleChatKeyDown(event) {
+            // Enter отправляет сообщение, Shift+Enter - новая строка
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessageFromChat();
+            }
+            
+            // Автоматическое изменение высоты textarea
+            const textarea = event.target;
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+        }
+        
+        // Старая функция loadMessages (для совместимости)
+        async function loadMessages() {
+            const chatId = document.getElementById('messagesChatId')?.value || currentChat.identifier;
+            if (chatId) {
+                loadChatMessages(chatId);
+            }
+        }
+        
+        // Переменные для отслеживания обработанных событий
+        let lastProcessedEventId = null;
+        let processedEventIds = new Set(); // Множество обработанных ID для надежности
+        
+        // Функция для создания и показа toast-уведомления
+        function showEventToast(event) {
+            const toastContainer = document.querySelector('.toast-container');
+            if (!toastContainer) {
+                console.warn('Контейнер для toast не найден');
+                return;
+            }
+            
+            // Проверяем, не показывали ли мы уже это событие
+            if (processedEventIds.has(event.message_id)) {
+                console.log('Событие уже было показано:', event.message_id);
+                return;
+            }
+            
+            const toastId = `toast-${event.message_id || Date.now()}`;
+            const isEdited = event.type === 'message_edited';
+            const icon = isEdited ? '✏️' : '📨';
+            const bgClass = isEdited ? 'bg-warning' : 'bg-success';
+            const textClass = isEdited ? 'text-dark' : 'text-white';
+            
+            // Ограничиваем длину текста для toast
+            const eventText = event.text || '(медиа)';
+            const shortText = eventText.length > 100 ? eventText.substring(0, 100) + '...' : eventText;
+            
+            const toastHTML = `
+                <div id="${toastId}" class="toast ${bgClass} ${textClass}" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                    <div class="toast-header ${bgClass} ${textClass} border-0">
+                        <strong class="me-auto">${icon} ${isEdited ? 'Сообщение отредактировано' : 'Новое сообщение'}</strong>
+                        <small class="text-muted">только что</small>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body ${textClass}">
+                        <div class="fw-bold mb-1">${escapeHtml(event.chat_title || event.sender_name || 'Неизвестно')}</div>
+                        <div>${escapeHtml(shortText)}</div>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            
+            // Инициализируем и показываем toast
+            const toastElement = document.getElementById(toastId);
+            if (!toastElement) {
+                console.error('Не удалось создать элемент toast');
+                return;
+            }
+            
+            const toast = new bootstrap.Toast(toastElement, {
+                autohide: true,
+                delay: 5000
+            });
+            
+            // Помечаем событие как обработанное
+            processedEventIds.add(event.message_id);
+            console.log('Показываем toast для события:', event.message_id, event.sender_name);
+            
+            toast.show();
+            
+            // Удаляем событие из списка при закрытии toast
+            toastElement.addEventListener('hidden.bs.toast', () => {
+                // Удаляем событие через API
+                if (event.message_id) {
+                    fetch(`/api/events/${event.message_id}`, {
+                        method: 'DELETE'
+                    }).catch(err => {
+                        console.error('Ошибка при удалении события:', err);
+                    });
+                }
+                // Удаляем элемент из DOM
+                toastElement.remove();
+            });
+            
+            // Обработчик клика на крестик
+            const closeButton = toastElement.querySelector('.btn-close');
+            if (closeButton) {
+                closeButton.addEventListener('click', () => {
+                    // Удаляем событие из списка при ручном закрытии
+                    if (event.message_id) {
+                        fetch(`/api/events/${event.message_id}`, {
+                            method: 'DELETE'
+                        }).catch(err => {
+                            console.error('Ошибка при удалении события:', err);
+                        });
+                    }
+                });
+            }
+        }
+        
+        // Проверка новых событий и показ toast
+        async function checkNewEvents() {
+            try {
+                const response = await fetch('/api/events');
+                if (!response.ok) {
+                    console.error('Ошибка при получении событий:', response.status);
+                    return;
+                }
+                
+                const data = await response.json();
+                if (data.status === 'success' && data.data && data.data.length > 0) {
+                    const events = data.data;
+                    console.log(`Получено событий: ${events.length}, обработано: ${processedEventIds.size}`);
+                    
+                    // Если это первый запуск, помечаем все существующие события как обработанные
+                    if (lastProcessedEventId === null) {
+                        events.forEach(event => {
+                            if (event.message_id) {
+                                processedEventIds.add(event.message_id);
+                            }
+                        });
+                        if (events.length > 0) {
+                            lastProcessedEventId = events[events.length - 1].message_id;
+                        }
+                        console.log('Инициализация отслеживания событий. Последнее событие:', lastProcessedEventId);
+                        return;
+                    }
+                    
+                    // Находим новые события (которые еще не были обработаны)
+                    const newEvents = events.filter(event => {
+                        return event.message_id && !processedEventIds.has(event.message_id);
+                    });
+                    
+                    console.log(`Найдено новых событий: ${newEvents.length}`);
+                    
+                    // Показываем новые события как toast
+                    newEvents.forEach(event => {
+                        showEventToast(event);
+                    });
+                    
+                    // Обновляем lastProcessedEventId на самое последнее событие
+                    if (events.length > 0) {
+                        const latestEvent = events[events.length - 1];
+                        if (latestEvent.message_id) {
+                            lastProcessedEventId = latestEvent.message_id;
+                        }
+                    }
+                } else if (data.status === 'success' && (!data.data || data.data.length === 0)) {
+                    console.log('Нет событий');
+                }
+            } catch (error) {
+                console.error('Ошибка при проверке новых событий:', error);
+            }
+        }
+        
+        // Выход из Telegram аккаунта
+        async function logoutTelegram() {
+<!--            if (!confirm('Вы уверены, что хотите выйти из текущего Telegram аккаунта?\n\nПосле этого потребуется перезапустить приложение и авторизоваться заново.')) {-->
+<!--                return;-->
+<!--            }-->
+
+            try {
+                const response = await fetch('/api/logout-telegram', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert('✅ Сессия удалена!\n\nПерезапустите приложение (остановите и запустите снова) для авторизации под другим аккаунтом.');
+                } else {
+                    throw new Error(data.detail || 'Ошибка при выходе');
+                }
+            } catch (error) {
+                alert(`❌ Ошибка: ${error.message}`);
+            }
+        }
+        
+        // Инициализация при загрузке страницы
+        window.onload = function() {
+            // Сначала проверяем статус авторизации
+            checkAuthStatus();
+            
+            // Проверка новых событий для toast (каждую секунду, только если авторизован)
+            setInterval(() => {
+                const modalElement = document.getElementById('authModal');
+                if (!modalElement.classList.contains('show')) {
+                    checkNewEvents();
+                }
+            }, 1000);
+        };
+    </script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
