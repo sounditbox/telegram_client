@@ -25,7 +25,7 @@ cd ..
 
 По умолчанию сервер слушает только `127.0.0.1`. При внешнем `APP_HOST` обязательно задайте длинный случайный `ACCESS_TOKEN`; интерфейс попросит этот ключ при открытии.
 
-Основные параметры: `APP_HOST`, `APP_PORT`, `APP_RELOAD`, `SESSION_DIR`, `UPLOAD_DIR`, `MEDIA_CACHE_DIR`, `MAX_UPLOAD_BYTES`, `MAX_MEDIA_BYTES` и `AUTH_ATTEMPT_TTL_SECONDS`.
+Основные параметры: `APP_HOST`, `APP_PORT`, `APP_RELOAD`, `SESSION_DIR`, `UPLOAD_DIR`, `MEDIA_CACHE_DIR`, `DATABASE_PATH`, `MAX_UPLOAD_BYTES`, `MAX_MEDIA_BYTES`, `SYNC_INTERVAL_SECONDS`, `SYNC_DIALOG_LIMIT` и `AUTH_ATTEMPT_TTL_SECONDS`.
 
 Сессионный файл содержит ключ авторизации Telegram. Не добавляйте его в Git и не публикуйте каталог `data/`.
 
@@ -36,17 +36,17 @@ FastAPI routes / React UI / SSE
               ↓
        application services
               ↓
-       TelegramGateway
-              ↓
-        Telethon client
+ SQLite repositories ← sync service ← TelegramGateway ← Telethon
 
-Telethon handlers → EventBroker → SSE subscribers
+Telethon handlers → persistent event publisher → SQLite → EventBroker → SSE
 ```
 
 - `app/main.py` создаёт приложение и управляет lifespan.
 - `app/telegram/manager.py` — единственный владелец клиента, подключения и logout.
 - `app/telegram/gateway.py` — адаптер Telethon: нормализует chat ID, сущности и сообщения.
-- `app/services/` — use-case слой (`AuthService`, `MessagingService`, `DialogService`, `FileService`, `MediaService`).
+- `app/services/` — use-case слой (`AuthService`, `MessagingService`, `DialogService`, `FileService`, `MediaService`, `SynchronizationService`).
+- `app/storage/` — локальная SQLite-проекция диалогов и сообщений, используемая сервисным слоем.
+- `app/services/sync.py` — фоновая синхронизация Telegram и сохранение событий перед SSE-публикацией.
 - `app/api/routes/` — тонкие HTTP-роутеры без импорта Telethon и глобального состояния.
 - `app/events/broker.py` — bounded event store и SSE-потоки с монотонным sequence ID.
 - `frontend/src/` — React + TypeScript + Tailwind CSS 4 + Lucide; список диалогов и история имеют независимую прокрутку.
@@ -90,4 +90,4 @@ cd frontend
 npm run build
 ```
 
-Набор из 14 backend-тестов проверяет сервисный слой, тонкость роутеров, авторизацию и 2FA, безопасность файлов, event broker, обработчики событий и медиакэш. Тесты используют поддельный Telegram-клиент и не требуют входа в Telegram.
+Backend-тесты проверяют сервисный слой, SQLite-репозиторий, тонкость роутеров, авторизацию и 2FA, безопасность файлов, event broker, обработчики событий и медиакэш. Тесты используют поддельный Telegram-клиент и не требуют входа в Telegram.

@@ -27,6 +27,10 @@ class Settings(BaseSettings):
         default=PROJECT_ROOT / "data" / "media-cache",
         validation_alias="MEDIA_CACHE_DIR",
     )
+    database_path: Path = Field(
+        default=PROJECT_ROOT / "data" / "telegram-cache.sqlite3",
+        validation_alias="DATABASE_PATH",
+    )
     access_token: SecretStr | None = Field(default=None, validation_alias="ACCESS_TOKEN")
     host: str = Field(default="127.0.0.1", validation_alias="APP_HOST")
     port: int = Field(default=8000, ge=1, le=65535, validation_alias="APP_PORT")
@@ -48,6 +52,18 @@ class Settings(BaseSettings):
         ge=1024,
         le=2 * 1024 * 1024 * 1024,
         validation_alias="MAX_MEDIA_BYTES",
+    )
+    sync_interval_seconds: int = Field(
+        default=30,
+        ge=5,
+        le=3600,
+        validation_alias="SYNC_INTERVAL_SECONDS",
+    )
+    sync_dialog_limit: int = Field(
+        default=100,
+        ge=1,
+        le=500,
+        validation_alias="SYNC_DIALOG_LIMIT",
     )
 
     model_config = SettingsConfigDict(

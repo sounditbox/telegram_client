@@ -16,11 +16,14 @@ from app.core.config import Settings
 from app.core.errors import AuthFlowError, InvalidUpload
 from app.events.broker import EventBroker
 from app.main import create_app
+from app.models import DialogInfo, EventRecord, MediaInfo, MessageInfo
 from app.services.auth import AuthPhase, AuthService
 from app.services.media import MediaService
 from app.services.telegram import FileService
+from app.storage.repository import TelegramRepository
 from app.telegram.gateway import DownloadedMedia, TelegramGateway
 from app.telegram.handlers import TelegramEventHandlers
+from app.telegram.serialization import media_info
 
 
 class FakeClient:
@@ -191,9 +194,74 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
             sticker=None,
             file=SimpleNamespace(name=None, ext=".jpg", mime_type="image/jpeg", size=120),
         )
-        media = TelegramGateway._media_info(message)
+        media = media_info(message)
         self.assertEqual(media.kind, "photo")
         self.assertEqual(media.filename, "media_9.jpg")
+
+
+class RepositoryTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="telegram-desk-db-"))
+        self.repository = TelegramRepository(self.root / "cache.sqlite3")
+        await self.repository.initialize()
+
+    async def asyncTearDown(self):
+        for path in self.root.iterdir():
+            path.unlink()
+        self.root.rmdir()
+
+    async def test_dialogs_and_messages_round_trip(self):
+        await self.repository.store_dialogs(
+            [
+                DialogInfo(id=20, title="Second", kind="group"),
+                DialogInfo(id=10, title="First", kind="user", unread_count=2),
+            ]
+        )
+        await self.repository.store_messages(
+            10,
+            [
+                MessageInfo(id=2, text="new", sender_name="Alice"),
+                MessageInfo(
+                    id=1,
+                    text="photo",
+                    sender_name="Alice",
+                    has_media=True,
+                    media=MediaInfo(
+                        kind="photo",
+                        mime_type="image/jpeg",
+                        filename="one.jpg",
+                        size=12,
+                    ),
+                ),
+            ],
+        )
+
+        dialogs = await self.repository.list_dialogs(10)
+        messages = await self.repository.list_messages("10", 10)
+
+        self.assertEqual([dialog.id for dialog in dialogs], [20, 10])
+        self.assertEqual([message.id for message in messages], [2, 1])
+        self.assertEqual(messages[1].media.filename, "one.jpg")
+
+    async def test_event_updates_existing_message_before_delivery(self):
+        await self.repository.store_messages(
+            10,
+            [MessageInfo(id=7, text="before", sender_name="Alice")],
+        )
+        await self.repository.store_event(
+            EventRecord(
+                sequence=1,
+                kind="message_edited",
+                message_id=7,
+                chat_id=10,
+                text="after",
+                sender_name="Alice",
+                chat_title="Chat",
+            )
+        )
+
+        messages = await self.repository.list_messages(10, 10)
+        self.assertEqual(messages[0].text, "after")
 
 
 class ConfigurationTests(unittest.TestCase):

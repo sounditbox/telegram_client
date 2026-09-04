@@ -109,6 +109,9 @@ class EventRecord(BaseModel):
     sender_has_avatar: bool = False
     chat_title: str
     date: datetime | None = None
+    outgoing: bool = False
+    has_media: bool = False
+    media: MediaInfo | None = None
 
 
 class ErrorBody(BaseModel):

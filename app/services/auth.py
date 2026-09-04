@@ -11,6 +11,7 @@ from app.core.config import Settings
 from app.core.errors import AuthFlowError, RateLimited, TelegramUnavailable
 from app.events.broker import EventBroker
 from app.models import AuthAction, AuthStatus
+from app.storage.repository import TelegramRepository
 from app.telegram.gateway import TelegramGateway
 from app.telegram.manager import TelegramClientManager
 
@@ -37,11 +38,13 @@ class AuthService:
         manager: TelegramClientManager,
         gateway: TelegramGateway,
         broker: EventBroker,
+        repository: TelegramRepository | None = None,
     ) -> None:
         self._settings = settings
         self._manager = manager
         self._gateway = gateway
         self._broker = broker
+        self._repository = repository
         self._attempt: AuthAttempt | None = None
         self._lock = asyncio.Lock()
 
@@ -147,6 +150,8 @@ class AuthService:
             self._attempt = None
             await self._manager.log_out_and_restart()
             await self._broker.clear()
+            if self._repository is not None:
+                await self._repository.clear()
         return AuthAction(phase=AuthPhase.IDLE, message="Сессия Telegram удалена")
 
     def _current_phase(self) -> AuthPhase:
