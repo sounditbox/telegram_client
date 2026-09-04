@@ -90,6 +90,8 @@ Telethon handlers → persistent event publisher → SQLite → EventBroker → 
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
 cd frontend
 npm run build
+npx playwright install chromium  # один раз на новой машине
+npm run test:e2e
 ```
 
-Backend-тесты проверяют сервисный слой, SQLite-репозиторий, тонкость роутеров, авторизацию и 2FA, безопасность файлов, event broker, обработчики событий и медиакэш. Тесты используют поддельный Telegram-клиент и не требуют входа в Telegram.
+Backend-тесты проверяют сервисный слой, SQLite-репозиторий, тонкость роутеров, авторизацию и 2FA, безопасность файлов, event broker, обработчики событий и медиакэш. Playwright-сценарии проверяют положение и прокрутку диалогов, курсорную историю и доставку сообщения через SSE. Оба набора используют тестовые реализации Telegram API и не требуют входа в Telegram.

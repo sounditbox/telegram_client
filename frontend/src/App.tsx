@@ -567,7 +567,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
       <header className="relative z-20 flex h-[60px] items-center justify-between border-b border-white/8 bg-[#0b1120]/85 px-4 backdrop-blur-xl sm:px-5">
         <BrandMark compact />
         <div className="flex items-center gap-3">
-          <div className={`hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:flex ${liveConnected ? "border-emerald-300/10 bg-emerald-400/8 text-emerald-300" : "border-amber-300/10 bg-amber-400/8 text-amber-300"}`}>
+          <div data-testid="live-status" className={`hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs sm:flex ${liveConnected ? "border-emerald-300/10 bg-emerald-400/8 text-emerald-300" : "border-amber-300/10 bg-amber-400/8 text-amber-300"}`}>
             {liveConnected ? <Wifi size={13} /> : <WifiOff size={13} />}
             {liveConnected ? "Автообновление включено" : "Переподключение…"}
           </div>
@@ -599,6 +599,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
           </div>
 
           <div
+            data-testid="dialogs-scroll"
             className="scrollbar min-h-0 flex-1 overflow-y-scroll overscroll-contain p-2"
             onScroll={(event) => {
               const pane = event.currentTarget;
@@ -621,6 +622,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
             ) : (
               dialogs.map((dialog) => (
                 <button
+                  data-testid={`dialog-${dialog.id}`}
                   key={`${dialog.kind}-${dialog.id}`}
                   className={`dialog-row ${selected?.id === dialog.id ? "selected" : ""}`}
                   onClick={() => void chooseDialog(dialog)}
@@ -660,6 +662,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
               </div>
 
               <div
+                data-testid="messages-scroll"
                 ref={messagePane}
                 className="scrollbar relative min-h-0 flex-1 overflow-y-scroll overscroll-contain px-4 py-7 sm:px-8"
                 onScroll={(event) => {
@@ -819,7 +822,7 @@ function formatBytes(bytes: number): string {
 
 function MessageBubble({ message, chatId }: { message: MessageInfo; chatId: number | string }) {
   return (
-    <div className={`flex ${message.outgoing ? "justify-end" : "justify-start"}`}>
+    <div data-testid={`message-${message.id}`} className={`flex ${message.outgoing ? "justify-end" : "justify-start"}`}>
       <div className={`flex max-w-[88%] items-end gap-2 sm:max-w-[78%] ${message.outgoing ? "flex-row-reverse" : ""}`}>
         {!message.outgoing && message.sender_id && (
           <Avatar entityId={message.sender_id} title={message.sender_name} hasImage={message.sender_has_avatar} className="mb-0.5 h-7 w-7 shrink-0 text-[9px]" />
