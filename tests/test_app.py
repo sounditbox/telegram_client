@@ -109,6 +109,35 @@ class EventTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('"sequence": 2', block)
         await stream.aclose()
 
+    async def test_broker_restores_sequence_and_replays_only_missing_events(self):
+        broker = EventBroker()
+        restored = [
+            EventRecord(
+                sequence=40,
+                kind="new_message",
+                message_id=4,
+                chat_id=1,
+                text="restored",
+                sender_name="Alice",
+                chat_title="Chat",
+            )
+        ]
+        await broker.restore(restored)
+        await broker.publish(
+            kind="new_message",
+            message_id=5,
+            chat_id=1,
+            text="next",
+            sender_name="Alice",
+            chat_title="Chat",
+        )
+
+        stream = broker.stream(after=40)
+        block = await anext(stream)
+        self.assertIn('"sequence": 41', block)
+        self.assertIn('"text": "next"', block)
+        await stream.aclose()
+
 
 class HandlerTests(unittest.TestCase):
     def test_register_is_idempotent(self):
@@ -248,7 +277,7 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
             10,
             [MessageInfo(id=7, text="before", sender_name="Alice")],
         )
-        await self.repository.store_event(
+        stored = await self.repository.store_event(
             EventRecord(
                 sequence=1,
                 kind="message_edited",
@@ -262,6 +291,13 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
 
         messages = await self.repository.list_messages(10, 10)
         self.assertEqual(messages[0].text, "after")
+        self.assertGreater(stored.sequence, 0)
+
+        reopened = TelegramRepository(self.root / "cache.sqlite3")
+        await reopened.initialize()
+        persisted_events = await reopened.list_events()
+        self.assertEqual(persisted_events[-1].sequence, stored.sequence)
+        self.assertEqual(persisted_events[-1].text, "after")
 
     async def test_dialog_cursor_and_search_are_applied_in_storage(self):
         await self.repository.store_dialogs(

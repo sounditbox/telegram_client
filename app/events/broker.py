@@ -20,16 +20,33 @@ class EventBroker:
         async with self._lock:
             self._sequence += 1
             record = EventRecord(sequence=self._sequence, **event)
-            self._events.append(record)
-            for queue in tuple(self._subscribers):
-                if queue.full():
-                    queue.get_nowait()
-                queue.put_nowait(record)
+            self._publish_locked(record)
             return record
+
+    async def publish_record(self, record: EventRecord) -> EventRecord:
+        async with self._lock:
+            self._sequence = max(self._sequence, record.sequence)
+            self._publish_locked(record)
+            return record
+
+    async def restore(self, events: list[EventRecord]) -> None:
+        async with self._lock:
+            combined = {event.sequence: event for event in (*self._events, *events)}
+            self._events.clear()
+            self._events.extend(combined[key] for key in sorted(combined))
+            if combined:
+                self._sequence = max(self._sequence, max(combined))
 
     async def clear(self) -> None:
         async with self._lock:
             self._events.clear()
+
+    def _publish_locked(self, record: EventRecord) -> None:
+        self._events.append(record)
+        for queue in tuple(self._subscribers):
+            if queue.full():
+                queue.get_nowait()
+            queue.put_nowait(record)
 
     async def stream(self, after: int = 0) -> AsyncIterator[str]:
         queue: asyncio.Queue[EventRecord] = asyncio.Queue(self._queue_size)
