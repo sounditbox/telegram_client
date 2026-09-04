@@ -120,8 +120,10 @@ export async function streamEvents(
   signal: AbortSignal,
   onOpen?: () => void,
 ): Promise<void> {
+  const headers = new Headers(authHeaders());
+  if (after > 0) headers.set("Last-Event-ID", String(after));
   const response = await fetch(`/api/events/stream?after=${after}`, {
-    headers: authHeaders(),
+    headers,
     signal,
   });
   if (!response.ok || !response.body) {

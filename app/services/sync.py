@@ -23,8 +23,8 @@ class PersistingEventPublisher:
 
     async def publish(self, **event: object) -> EventRecord:
         record = EventRecord(sequence=0, **event)
-        await self._repository.store_event(record)
-        return await self._broker.publish(**event)
+        stored = await self._repository.store_event(record)
+        return await self._broker.publish_record(stored)
 
 
 class SynchronizationService:
@@ -34,16 +34,19 @@ class SynchronizationService:
         manager: TelegramClientManager,
         gateway: TelegramGateway,
         repository: TelegramRepository,
+        broker: EventBroker,
     ) -> None:
         self._settings = settings
         self._manager = manager
         self._gateway = gateway
         self._repository = repository
+        self._broker = broker
         self._stop_event = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         await self._repository.initialize()
+        await self._broker.restore(await self._repository.list_events())
         if self._task is None or self._task.done():
             self._stop_event.clear()
             self._task = asyncio.create_task(self._run(), name="telegram-dialog-sync")

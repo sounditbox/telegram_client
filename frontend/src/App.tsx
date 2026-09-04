@@ -33,6 +33,8 @@ import {
 import { ApiError, api, saveAccessToken, streamEvents } from "./api";
 import type { AuthAction, AuthStatus, DialogInfo, MediaInfo, MessageInfo, TelegramEvent } from "./types";
 
+const EVENT_SEQUENCE_KEY = "telegram-desk-last-event-sequence";
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Что-то пошло не так";
 }
@@ -336,7 +338,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
   const fileInput = useRef<HTMLInputElement>(null);
   const messagePane = useRef<HTMLDivElement>(null);
   const selectedRef = useRef<DialogInfo | null>(null);
-  const lastSequence = useRef(0);
+  const lastSequence = useRef(Number(sessionStorage.getItem(EVENT_SEQUENCE_KEY)) || 0);
   const messageRequest = useRef(0);
   const dialogCursor = useRef<number | undefined>(undefined);
   const messageCursor = useRef<number | undefined>(undefined);
@@ -421,7 +423,6 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
         });
       } else {
         setMessages((current) => mergeMessages(current, pageMessages));
-        scrollMessagesToBottom();
       }
     } finally {
       if (mode === "replace" && requestId === messageRequest.current) setLoadingMessages(false);
@@ -444,13 +445,16 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
 
   useEffect(() => {
     const controller = new AbortController();
+    let retryDelay = 750;
     async function connect() {
       while (!controller.signal.aborted) {
         try {
           await streamEvents(
             lastSequence.current,
             (event) => {
+              if (event.sequence <= lastSequence.current) return;
               lastSequence.current = event.sequence;
+              sessionStorage.setItem(EVENT_SEQUENCE_KEY, String(event.sequence));
               setToasts((current) => [...current.slice(-3), event]);
               window.setTimeout(
                 () => setToasts((current) => current.filter((item) => item.sequence !== event.sequence)),
@@ -458,6 +462,9 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
               );
               void loadDialogs({ refresh: true });
               if (selectedRef.current?.id === event.chat_id) {
+                const pane = messagePane.current;
+                const shouldFollow = !pane
+                  || pane.scrollHeight - pane.scrollTop - pane.clientHeight < 140;
                 setMessages((current) => {
                   if (current.some((message) => message.id === event.message_id)) return current;
                   return [...current, {
@@ -474,18 +481,29 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
                     media: event.media,
                   }];
                 });
-                scrollMessagesToBottom();
+                if (shouldFollow) scrollMessagesToBottom();
                 void loadMessages(selectedRef.current, "refresh");
               }
             },
             controller.signal,
-            () => setLiveConnected(true),
+            () => {
+              retryDelay = 750;
+              setLiveConnected(true);
+              void loadDialogs({ refresh: true });
+              if (selectedRef.current) {
+                void loadMessages(selectedRef.current, "refresh");
+              }
+            },
           );
+          setLiveConnected(false);
         } catch {
           if (!controller.signal.aborted) {
             setLiveConnected(false);
-            await new Promise((resolve) => window.setTimeout(resolve, 1500));
           }
+        }
+        if (!controller.signal.aborted) {
+          await new Promise((resolve) => window.setTimeout(resolve, retryDelay));
+          retryDelay = Math.min(Math.round(retryDelay * 1.8), 10_000);
         }
       }
     }
@@ -513,6 +531,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
       await api.sendMessage(selected.id, text);
       setDraft("");
       await loadMessages(selected, "refresh");
+      scrollMessagesToBottom();
     } catch (error) {
       window.alert(errorMessage(error));
     } finally {
@@ -527,6 +546,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
     try {
       await api.sendFile(selected.id, file);
       await loadMessages(selected, "refresh");
+      scrollMessagesToBottom();
     } catch (error) {
       window.alert(errorMessage(error));
     } finally {

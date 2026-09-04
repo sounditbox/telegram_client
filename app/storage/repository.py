@@ -45,9 +45,35 @@ CREATE TABLE IF NOT EXISTS messages (
     PRIMARY KEY (chat_id, message_id)
 );
 
+CREATE TABLE IF NOT EXISTS events (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_dialogs_position ON dialogs(position, id);
 CREATE INDEX IF NOT EXISTS idx_messages_chat_message
     ON messages(chat_id, message_id DESC);
+"""
+
+_MESSAGE_UPSERT = """
+INSERT INTO messages (
+    chat_id, message_id, text, sender_id, sender_name, sender_username,
+    sender_has_avatar, date, outgoing, is_reply, has_media, media_json,
+    updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(chat_id, message_id) DO UPDATE SET
+    text=excluded.text,
+    sender_id=excluded.sender_id,
+    sender_name=excluded.sender_name,
+    sender_username=excluded.sender_username,
+    sender_has_avatar=excluded.sender_has_avatar,
+    date=excluded.date,
+    outgoing=excluded.outgoing,
+    is_reply=excluded.is_reply,
+    has_media=excluded.has_media,
+    media_json=excluded.media_json,
+    updated_at=excluded.updated_at
 """
 
 
@@ -96,22 +122,19 @@ class TelegramRepository:
         async with self._write_lock:
             await asyncio.to_thread(self._store_messages_sync, str(chat_id), values)
 
-    async def store_event(self, event: EventRecord) -> None:
-        if event.chat_id is None:
-            return
-        message = MessageInfo(
-            id=event.message_id,
-            text=event.text,
-            sender_id=event.sender_id,
-            sender_name=event.sender_name,
-            sender_username=event.sender_username,
-            sender_has_avatar=event.sender_has_avatar,
-            date=event.date,
-            outgoing=event.outgoing,
-            has_media=event.has_media,
-            media=event.media,
-        )
-        await self.store_messages(event.chat_id, [message])
+    async def store_event(self, event: EventRecord) -> EventRecord:
+        async with self._write_lock:
+            sequence = await asyncio.to_thread(self._store_event_sync, event)
+        return event.model_copy(update={"sequence": sequence})
+
+    async def list_events(self, limit: int = 200) -> list[EventRecord]:
+        rows = await asyncio.to_thread(self._query_events_sync, limit)
+        events: list[EventRecord] = []
+        for row in reversed(rows):
+            payload = json.loads(row["payload"])
+            payload["sequence"] = row["sequence"]
+            events.append(EventRecord.model_validate(payload))
+        return events
 
     async def list_messages(
         self,
@@ -201,29 +224,51 @@ class TelegramRepository:
         timestamp = datetime.now(UTC).isoformat()
         rows = [self._message_row(chat_id, message, timestamp) for message in messages]
         with closing(self._connect()) as connection:
-            connection.executemany(
+            connection.executemany(_MESSAGE_UPSERT, rows)
+            connection.commit()
+
+    def _store_event_sync(self, event: EventRecord) -> int:
+        timestamp = datetime.now(UTC).isoformat()
+        with closing(self._connect()) as connection:
+            if event.chat_id is not None:
+                message = MessageInfo(
+                    id=event.message_id,
+                    text=event.text,
+                    sender_id=event.sender_id,
+                    sender_name=event.sender_name,
+                    sender_username=event.sender_username,
+                    sender_has_avatar=event.sender_has_avatar,
+                    date=event.date,
+                    outgoing=event.outgoing,
+                    has_media=event.has_media,
+                    media=event.media,
+                )
+                connection.execute(
+                    _MESSAGE_UPSERT,
+                    self._message_row(str(event.chat_id), message, timestamp),
+                )
+            cursor = connection.execute(
+                "INSERT INTO events(payload, created_at) VALUES (?, ?)",
+                (json.dumps(event.model_dump(mode="json"), ensure_ascii=False), timestamp),
+            )
+            sequence = int(cursor.lastrowid)
+            connection.execute(
                 """
-                INSERT INTO messages (
-                    chat_id, message_id, text, sender_id, sender_name, sender_username,
-                    sender_has_avatar, date, outgoing, is_reply, has_media, media_json,
-                    updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(chat_id, message_id) DO UPDATE SET
-                    text=excluded.text,
-                    sender_id=excluded.sender_id,
-                    sender_name=excluded.sender_name,
-                    sender_username=excluded.sender_username,
-                    sender_has_avatar=excluded.sender_has_avatar,
-                    date=excluded.date,
-                    outgoing=excluded.outgoing,
-                    is_reply=excluded.is_reply,
-                    has_media=excluded.has_media,
-                    media_json=excluded.media_json,
-                    updated_at=excluded.updated_at
-                """,
-                rows,
+                DELETE FROM events
+                WHERE sequence NOT IN (
+                    SELECT sequence FROM events ORDER BY sequence DESC LIMIT 1000
+                )
+                """
             )
             connection.commit()
+            return sequence
+
+    def _query_events_sync(self, limit: int) -> list[sqlite3.Row]:
+        with closing(self._connect()) as connection:
+            return connection.execute(
+                "SELECT sequence, payload FROM events ORDER BY sequence DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
 
     def _query_messages_sync(
         self,
@@ -245,6 +290,7 @@ class TelegramRepository:
         with closing(self._connect()) as connection:
             connection.execute("DELETE FROM messages")
             connection.execute("DELETE FROM dialogs")
+            connection.execute("DELETE FROM events")
             connection.commit()
 
     @staticmethod

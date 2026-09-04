@@ -39,7 +39,7 @@ def build_services(settings: Settings) -> Services:
     publisher = PersistingEventPublisher(repository, broker)
     manager = TelegramClientManager(settings, publisher)
     gateway = TelegramGateway(manager)
-    sync = SynchronizationService(settings, manager, gateway, repository)
+    sync = SynchronizationService(settings, manager, gateway, repository, broker)
     return Services(
         repository=repository,
         manager=manager,
