@@ -31,6 +31,16 @@ wheels/
 *.session
 *.session-journal
 
+# Runtime data
+data/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Local logs
+logs/
+
 # IDE
 .vscode/
 .idea/
