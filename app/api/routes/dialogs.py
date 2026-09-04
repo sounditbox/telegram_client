@@ -3,27 +3,46 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query
 
 from app.api.dependencies import ServicesDep
-from app.models import ApiEnvelope, DialogInfo, MessageInfo, UserInfo
+from app.models import ApiEnvelope, CursorPage, DialogInfo, MessageInfo, UserInfo
 
 
 router = APIRouter(prefix="/dialogs", tags=["dialogs"])
 
 
-@router.get("", response_model=ApiEnvelope[list[DialogInfo]])
+@router.get("", response_model=ApiEnvelope[CursorPage[DialogInfo]])
 async def list_dialogs(
     services: ServicesDep,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-) -> ApiEnvelope[list[DialogInfo]]:
-    return ApiEnvelope(data=await services.dialogs.list(limit))
+    limit: Annotated[int, Query(ge=1, le=100)] = 40,
+    cursor: Annotated[int, Query(ge=0)] = 0,
+    query: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+    refresh: bool = False,
+) -> ApiEnvelope[CursorPage[DialogInfo]]:
+    return ApiEnvelope(
+        data=await services.dialogs.list(
+            limit,
+            cursor=cursor,
+            query=query,
+            refresh=refresh,
+        )
+    )
 
 
-@router.get("/{chat_id}/messages", response_model=ApiEnvelope[list[MessageInfo]])
+@router.get("/{chat_id}/messages", response_model=ApiEnvelope[CursorPage[MessageInfo]])
 async def list_messages(
     chat_id: Annotated[str, Path(min_length=1, max_length=128)],
     services: ServicesDep,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-) -> ApiEnvelope[list[MessageInfo]]:
-    return ApiEnvelope(data=await services.dialogs.messages(chat_id, limit))
+    limit: Annotated[int, Query(ge=1, le=100)] = 40,
+    cursor: Annotated[int | None, Query(gt=0)] = None,
+    refresh: bool = False,
+) -> ApiEnvelope[CursorPage[MessageInfo]]:
+    return ApiEnvelope(
+        data=await services.dialogs.messages(
+            chat_id,
+            limit,
+            before_id=cursor,
+            refresh=refresh,
+        )
+    )
 
 
 @router.get("/{chat_id}/participants", response_model=ApiEnvelope[list[UserInfo]])

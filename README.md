@@ -82,6 +82,8 @@ Telethon handlers → persistent event publisher → SQLite → EventBroker → 
 | `GET` | `/api/media/dialogs/{chat_id}/messages/{message_id}` | Вложение сообщения |
 | `GET` | `/api/events/stream` | SSE-поток событий |
 
+Списки диалогов и сообщений используют курсорную пагинацию: `cursor` передаётся из `next_cursor` предыдущего ответа. Для диалогов доступен локальный поиск через параметр `query`, а `refresh=true` принудительно обновляет первую страницу из Telegram.
+
 ## Проверки
 
 ```powershell

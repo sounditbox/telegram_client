@@ -15,6 +15,7 @@ from app.events.broker import EventBroker
 from app.models import (
     BroadcastRecipient,
     BroadcastResult,
+    CursorPage,
     DialogInfo,
     EntityInfo,
     FileResult,
@@ -39,21 +40,65 @@ class DialogService:
         self._gateway = gateway
         self._repository = repository
 
-    async def list(self, limit: int) -> list[DialogInfo]:
-        cached = await self._repository.list_dialogs(limit)
-        if cached:
-            return cached
-        dialogs = await self._gateway.list_dialogs(limit)
-        await self._repository.store_dialogs(dialogs)
-        return dialogs
+    async def list(
+        self,
+        limit: int,
+        *,
+        cursor: int = 0,
+        query: str | None = None,
+        refresh: bool = False,
+    ) -> CursorPage[DialogInfo]:
+        if refresh and cursor == 0 and not query:
+            dialogs = await self._gateway.list_dialogs(max(limit + 1, 100))
+            await self._repository.store_dialogs(dialogs)
 
-    async def messages(self, chat_id: str, limit: int) -> list[MessageInfo]:
-        cached = await self._repository.list_messages(chat_id, limit)
-        if cached:
-            return cached
-        messages = await self._gateway.list_messages(chat_id, limit)
-        await self._repository.store_messages(chat_id, messages)
-        return messages
+        cached = await self._repository.list_dialogs(
+            limit + 1,
+            cursor=cursor,
+            query=query,
+        )
+        if len(cached) <= limit and not query:
+            remote = await self._gateway.list_dialogs(cursor + limit + 1)
+            await self._repository.store_dialogs(remote)
+            cached = remote[cursor : cursor + limit + 1]
+
+        items = cached[:limit]
+        has_more = len(cached) > limit
+        return CursorPage(
+            items=items,
+            has_more=has_more,
+            next_cursor=cursor + len(items) if has_more else None,
+        )
+
+    async def messages(
+        self,
+        chat_id: str,
+        limit: int,
+        *,
+        before_id: int | None = None,
+        refresh: bool = False,
+    ) -> CursorPage[MessageInfo]:
+        cached = await self._repository.list_messages(
+            chat_id,
+            limit + 1,
+            before_id=before_id,
+        )
+        if refresh or len(cached) <= limit:
+            remote = await self._gateway.list_messages(
+                chat_id,
+                limit + 1,
+                before_id=before_id,
+            )
+            await self._repository.store_messages(chat_id, remote)
+            cached = remote
+
+        items = cached[:limit]
+        has_more = len(cached) > limit
+        return CursorPage(
+            items=items,
+            has_more=has_more,
+            next_cursor=items[-1].id if has_more and items else None,
+        )
 
     async def participants(self, chat_id: str, limit: int) -> list[UserInfo]:
         return await self._gateway.list_participants(chat_id, limit)

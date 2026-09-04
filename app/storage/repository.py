@@ -69,8 +69,14 @@ class TelegramRepository:
         async with self._write_lock:
             await asyncio.to_thread(self._store_dialogs_sync, values)
 
-    async def list_dialogs(self, limit: int) -> list[DialogInfo]:
-        rows = await asyncio.to_thread(self._query_dialogs_sync, limit)
+    async def list_dialogs(
+        self,
+        limit: int,
+        *,
+        cursor: int = 0,
+        query: str | None = None,
+    ) -> list[DialogInfo]:
+        rows = await asyncio.to_thread(self._query_dialogs_sync, limit, cursor, query)
         return [
             DialogInfo(
                 id=row["id"],
@@ -173,12 +179,23 @@ class TelegramRepository:
             )
             connection.commit()
 
-    def _query_dialogs_sync(self, limit: int) -> list[sqlite3.Row]:
+    def _query_dialogs_sync(
+        self,
+        limit: int,
+        cursor: int,
+        query: str | None,
+    ) -> list[sqlite3.Row]:
+        statement = "SELECT * FROM dialogs"
+        params: list[Any] = []
+        if query:
+            statement += " WHERE title LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\'"
+            escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            params.extend([pattern, pattern])
+        statement += " ORDER BY position, id LIMIT ? OFFSET ?"
+        params.extend([limit, cursor])
         with closing(self._connect()) as connection:
-            return connection.execute(
-                "SELECT * FROM dialogs ORDER BY position, id LIMIT ?",
-                (limit,),
-            ).fetchall()
+            return connection.execute(statement, params).fetchall()
 
     def _store_messages_sync(self, chat_id: str, messages: list[MessageInfo]) -> None:
         timestamp = datetime.now(UTC).isoformat()
