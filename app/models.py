@@ -14,6 +14,12 @@ class ApiEnvelope(BaseModel, Generic[T]):
     data: T
 
 
+class CursorPage(BaseModel, Generic[T]):
+    items: list[T]
+    next_cursor: int | None = None
+    has_more: bool = False
+
+
 class UserInfo(BaseModel):
     id: int
     first_name: str | None = None

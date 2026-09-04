@@ -73,6 +73,15 @@ export interface TelegramEvent {
   sender_has_avatar: boolean;
   chat_title: string;
   date: string | null;
+  outgoing: boolean;
+  has_media: boolean;
+  media: MediaInfo | null;
+}
+
+export interface CursorPage<T> {
+  items: T[];
+  next_cursor: number | null;
+  has_more: boolean;
 }
 
 export interface ApiEnvelope<T> {

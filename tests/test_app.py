@@ -19,7 +19,7 @@ from app.main import create_app
 from app.models import DialogInfo, EventRecord, MediaInfo, MessageInfo
 from app.services.auth import AuthPhase, AuthService
 from app.services.media import MediaService
-from app.services.telegram import FileService
+from app.services.telegram import DialogService, FileService
 from app.storage.repository import TelegramRepository
 from app.telegram.gateway import DownloadedMedia, TelegramGateway
 from app.telegram.handlers import TelegramEventHandlers
@@ -262,6 +262,71 @@ class RepositoryTests(unittest.IsolatedAsyncioTestCase):
 
         messages = await self.repository.list_messages(10, 10)
         self.assertEqual(messages[0].text, "after")
+
+    async def test_dialog_cursor_and_search_are_applied_in_storage(self):
+        await self.repository.store_dialogs(
+            [
+                DialogInfo(id=1, title="Alpha", kind="user"),
+                DialogInfo(id=2, title="Beta 100%", kind="group"),
+                DialogInfo(id=3, title="Gamma", kind="channel"),
+            ]
+        )
+
+        second_page = await self.repository.list_dialogs(2, cursor=1)
+        search = await self.repository.list_dialogs(10, query="100%")
+
+        self.assertEqual([dialog.id for dialog in second_page], [2, 3])
+        self.assertEqual([dialog.id for dialog in search], [2])
+
+
+class FakePaginationGateway:
+    def __init__(self):
+        self.dialogs = [
+            DialogInfo(id=index, title=f"Dialog {index}", kind="user")
+            for index in range(1, 6)
+        ]
+        self.messages = [
+            MessageInfo(id=index, text=str(index), sender_name="Alice")
+            for index in range(7, 0, -1)
+        ]
+
+    async def list_dialogs(self, limit):
+        return self.dialogs[:limit]
+
+    async def list_messages(self, _chat_id, limit, *, before_id=None):
+        messages = self.messages
+        if before_id is not None:
+            messages = [message for message in messages if message.id < before_id]
+        return messages[:limit]
+
+
+class PaginationTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="telegram-desk-page-"))
+        self.repository = TelegramRepository(self.root / "cache.sqlite3")
+        await self.repository.initialize()
+        self.service = DialogService(FakePaginationGateway(), self.repository)
+
+    async def asyncTearDown(self):
+        for path in self.root.iterdir():
+            path.unlink()
+        self.root.rmdir()
+
+    async def test_dialog_pages_do_not_overlap(self):
+        first = await self.service.list(2)
+        second = await self.service.list(2, cursor=first.next_cursor)
+
+        self.assertEqual([dialog.id for dialog in first.items], [1, 2])
+        self.assertEqual([dialog.id for dialog in second.items], [3, 4])
+        self.assertTrue(first.has_more)
+
+    async def test_message_cursor_loads_older_history(self):
+        first = await self.service.messages("10", 3)
+        second = await self.service.messages("10", 3, before_id=first.next_cursor)
+
+        self.assertEqual([message.id for message in first.items], [7, 6, 5])
+        self.assertEqual([message.id for message in second.items], [4, 3, 2])
+        self.assertTrue(second.has_more)
 
 
 class ConfigurationTests(unittest.TestCase):

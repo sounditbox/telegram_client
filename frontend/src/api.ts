@@ -3,6 +3,7 @@ import type {
   ApiErrorPayload,
   AuthAction,
   AuthStatus,
+  CursorPage,
   DialogInfo,
   FileResult,
   MessageInfo,
@@ -74,9 +75,24 @@ export const api = {
     }),
   resetAuth: () => request<AuthAction>("/api/auth/reset", { method: "POST" }),
   logout: () => request<AuthAction>("/api/auth/logout", { method: "POST" }),
-  dialogs: () => request<DialogInfo[]>("/api/dialogs?limit=100"),
-  messages: (chatId: number | string) =>
-    request<MessageInfo[]>(`/api/dialogs/${encodeURIComponent(chatId)}/messages?limit=100`),
+  dialogs: (options: { cursor?: number; query?: string; refresh?: boolean } = {}) => {
+    const params = new URLSearchParams({ limit: "40" });
+    if (options.cursor !== undefined) params.set("cursor", String(options.cursor));
+    if (options.query) params.set("query", options.query);
+    if (options.refresh) params.set("refresh", "true");
+    return request<CursorPage<DialogInfo>>(`/api/dialogs?${params}`);
+  },
+  messages: (
+    chatId: number | string,
+    options: { cursor?: number; refresh?: boolean } = {},
+  ) => {
+    const params = new URLSearchParams({ limit: "40" });
+    if (options.cursor !== undefined) params.set("cursor", String(options.cursor));
+    if (options.refresh) params.set("refresh", "true");
+    return request<CursorPage<MessageInfo>>(
+      `/api/dialogs/${encodeURIComponent(chatId)}/messages?${params}`,
+    );
+  },
   markRead: (chatId: number | string) =>
     request<{ read: boolean }>(`/api/dialogs/${encodeURIComponent(chatId)}/read`, {
       method: "POST",

@@ -56,11 +56,21 @@ class TelegramGateway:
             )
         return result
 
-    async def list_messages(self, reference: str, limit: int) -> list[MessageInfo]:
+    async def list_messages(
+        self,
+        reference: str,
+        limit: int,
+        *,
+        before_id: int | None = None,
+    ) -> list[MessageInfo]:
         client = await self._manager.require_authorized()
         entity = await self._resolve_entity(reference)
         result: list[MessageInfo] = []
-        async for message in client.iter_messages(entity, limit=limit):
+        async for message in client.iter_messages(
+            entity,
+            limit=limit,
+            offset_id=before_id or 0,
+        ):
             sender = await message.get_sender()
             result.append(
                 MessageInfo(

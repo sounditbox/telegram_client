@@ -26,7 +26,6 @@ import {
   type FormEvent,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -52,6 +51,12 @@ function formatTime(value: string | null): string {
   return new Intl.DateTimeFormat("ru", { hour: "2-digit", minute: "2-digit" }).format(
     new Date(value),
   );
+}
+
+function mergeMessages(...groups: MessageInfo[][]): MessageInfo[] {
+  const byId = new Map<number, MessageInfo>();
+  groups.flat().forEach((message) => byId.set(message.id, message));
+  return [...byId.values()].sort((left, right) => left.id - right.id);
 }
 
 function App() {
@@ -320,7 +325,11 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [loadingDialogs, setLoadingDialogs] = useState(true);
+  const [loadingMoreDialogs, setLoadingMoreDialogs] = useState(false);
+  const [hasMoreDialogs, setHasMoreDialogs] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [liveConnected, setLiveConnected] = useState(false);
   const [toasts, setToasts] = useState<TelegramEvent[]>([]);
@@ -329,39 +338,109 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
   const selectedRef = useRef<DialogInfo | null>(null);
   const lastSequence = useRef(0);
   const messageRequest = useRef(0);
+  const dialogCursor = useRef<number | undefined>(undefined);
+  const messageCursor = useRef<number | undefined>(undefined);
+  const dialogQuery = useRef("");
+  const dialogsBusy = useRef(false);
+  const olderMessagesBusy = useRef(false);
 
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
 
-  const loadDialogs = useCallback(async () => {
-    setLoadingDialogs(true);
+  const scrollMessagesToBottom = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const pane = messagePane.current;
+      if (pane) pane.scrollTop = pane.scrollHeight;
+    });
+  }, []);
+
+  const loadDialogs = useCallback(async ({
+    append = false,
+    refresh = false,
+    query = dialogQuery.current,
+  }: { append?: boolean; refresh?: boolean; query?: string } = {}) => {
+    if (dialogsBusy.current) return;
+    dialogsBusy.current = true;
+    if (append) setLoadingMoreDialogs(true);
+    else setLoadingDialogs(true);
     try {
-      setDialogs(await api.dialogs());
+      const page = await api.dialogs({
+        cursor: append ? dialogCursor.current : undefined,
+        query: query || undefined,
+        refresh,
+      });
+      setDialogs((current) => {
+        if (!append) return page.items;
+        const merged = new Map(current.map((dialog) => [dialog.id, dialog]));
+        page.items.forEach((dialog) => merged.set(dialog.id, dialog));
+        return [...merged.values()];
+      });
+      dialogCursor.current = page.next_cursor ?? undefined;
+      setHasMoreDialogs(page.has_more);
     } finally {
-      setLoadingDialogs(false);
+      dialogsBusy.current = false;
+      if (append) setLoadingMoreDialogs(false);
+      else setLoadingDialogs(false);
     }
   }, []);
 
-  const loadMessages = useCallback(async (dialog: DialogInfo, silent = false) => {
-    const requestId = ++messageRequest.current;
-    if (!silent) setLoadingMessages(true);
-    try {
-      const nextMessages = [...(await api.messages(dialog.id))].reverse();
-      if (requestId === messageRequest.current) setMessages(nextMessages);
-    } finally {
-      if (!silent && requestId === messageRequest.current) setLoadingMessages(false);
+  const loadMessages = useCallback(async (
+    dialog: DialogInfo,
+    mode: "replace" | "older" | "refresh" = "replace",
+  ) => {
+    if (mode === "older" && olderMessagesBusy.current) return;
+    if (mode === "older") {
+      olderMessagesBusy.current = true;
+      setLoadingOlderMessages(true);
     }
-  }, []);
-
-  useEffect(() => {
-    void loadDialogs();
-  }, [loadDialogs]);
-
-  useEffect(() => {
+    const requestId = mode === "replace" ? ++messageRequest.current : messageRequest.current;
+    if (mode === "replace") setLoadingMessages(true);
     const pane = messagePane.current;
-    if (pane) pane.scrollTop = pane.scrollHeight;
-  }, [messages, selected]);
+    const previousHeight = pane?.scrollHeight ?? 0;
+    const previousTop = pane?.scrollTop ?? 0;
+    try {
+      const page = await api.messages(dialog.id, {
+        cursor: mode === "older" ? messageCursor.current : undefined,
+        refresh: mode === "refresh",
+      });
+      if (requestId !== messageRequest.current || selectedRef.current?.id !== dialog.id) return;
+      const pageMessages = [...page.items].reverse();
+      if (mode === "replace") {
+        setMessages(pageMessages);
+        messageCursor.current = page.next_cursor ?? undefined;
+        setHasOlderMessages(page.has_more);
+        scrollMessagesToBottom();
+      } else if (mode === "older") {
+        setMessages((current) => mergeMessages(pageMessages, current));
+        messageCursor.current = page.next_cursor ?? undefined;
+        setHasOlderMessages(page.has_more);
+        window.requestAnimationFrame(() => {
+          const currentPane = messagePane.current;
+          if (currentPane) currentPane.scrollTop = currentPane.scrollHeight - previousHeight + previousTop;
+        });
+      } else {
+        setMessages((current) => mergeMessages(current, pageMessages));
+        scrollMessagesToBottom();
+      }
+    } finally {
+      if (mode === "replace" && requestId === messageRequest.current) setLoadingMessages(false);
+      if (mode === "older") {
+        olderMessagesBusy.current = false;
+        setLoadingOlderMessages(false);
+      }
+    }
+  }, [scrollMessagesToBottom]);
+
+  useEffect(() => {
+    const query = search.trim();
+    const timer = window.setTimeout(() => {
+      dialogQuery.current = query;
+      dialogCursor.current = undefined;
+      void loadDialogs({ query });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [loadDialogs, search]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -377,7 +456,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
                 () => setToasts((current) => current.filter((item) => item.sequence !== event.sequence)),
                 5500,
               );
-              void loadDialogs();
+              void loadDialogs({ refresh: true });
               if (selectedRef.current?.id === event.chat_id) {
                 setMessages((current) => {
                   if (current.some((message) => message.id === event.message_id)) return current;
@@ -391,11 +470,12 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
                     date: event.date,
                     outgoing: false,
                     is_reply: false,
-                    has_media: event.text === "(медиа)",
-                    media: null,
+                    has_media: event.has_media,
+                    media: event.media,
                   }];
                 });
-                void loadMessages(selectedRef.current, true);
+                scrollMessagesToBottom();
+                void loadMessages(selectedRef.current, "refresh");
               }
             },
             controller.signal,
@@ -411,19 +491,14 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
     }
     void connect();
     return () => controller.abort();
-  }, [loadDialogs, loadMessages]);
-
-  const filteredDialogs = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase("ru");
-    if (!query) return dialogs;
-    return dialogs.filter((dialog) =>
-      `${dialog.title} ${dialog.username ?? ""}`.toLocaleLowerCase("ru").includes(query),
-    );
-  }, [dialogs, search]);
+  }, [loadDialogs, loadMessages, scrollMessagesToBottom]);
 
   async function chooseDialog(dialog: DialogInfo) {
     setSelected(dialog);
+    selectedRef.current = dialog;
     setMessages([]);
+    messageCursor.current = undefined;
+    setHasOlderMessages(false);
     await Promise.allSettled([loadMessages(dialog), api.markRead(dialog.id)]);
     setDialogs((current) =>
       current.map((item) => (item.id === dialog.id ? { ...item, unread_count: 0 } : item)),
@@ -437,7 +512,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
     try {
       await api.sendMessage(selected.id, text);
       setDraft("");
-      await loadMessages(selected);
+      await loadMessages(selected, "refresh");
     } catch (error) {
       window.alert(errorMessage(error));
     } finally {
@@ -451,7 +526,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
     setSending(true);
     try {
       await api.sendFile(selected.id, file);
-      await loadMessages(selected);
+      await loadMessages(selected, "refresh");
     } catch (error) {
       window.alert(errorMessage(error));
     } finally {
@@ -492,7 +567,7 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
           <div className="shrink-0 border-b border-white/8 px-3 py-2.5">
             <div className="flex items-center justify-between">
               <p className="pl-1 text-xs font-medium text-slate-400">{dialogs.length} диалогов</p>
-              <button className="icon-button h-8! w-8!" title="Обновить" onClick={() => void loadDialogs()}>
+              <button className="icon-button h-8! w-8!" title="Обновить" onClick={() => void loadDialogs({ refresh: true })}>
                 <RefreshCw className={loadingDialogs ? "animate-spin" : ""} size={15} />
               </button>
             </div>
@@ -503,16 +578,28 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
             </div>
           </div>
 
-          <div className="scrollbar min-h-0 flex-1 overflow-y-scroll overscroll-contain p-2">
+          <div
+            className="scrollbar min-h-0 flex-1 overflow-y-scroll overscroll-contain p-2"
+            onScroll={(event) => {
+              const pane = event.currentTarget;
+              if (
+                hasMoreDialogs
+                && !loadingMoreDialogs
+                && pane.scrollHeight - pane.scrollTop - pane.clientHeight < 160
+              ) {
+                void loadDialogs({ append: true });
+              }
+            }}
+          >
             {loadingDialogs && dialogs.length === 0 ? (
               <ListSkeleton />
-            ) : filteredDialogs.length === 0 ? (
+            ) : dialogs.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center px-8 text-center text-slate-500">
                 <Search size={28} strokeWidth={1.4} />
                 <p className="mt-3 text-sm">Диалоги не найдены</p>
               </div>
             ) : (
-              filteredDialogs.map((dialog) => (
+              dialogs.map((dialog) => (
                 <button
                   key={`${dialog.kind}-${dialog.id}`}
                   className={`dialog-row ${selected?.id === dialog.id ? "selected" : ""}`}
@@ -532,6 +619,11 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
                 </button>
               ))
             )}
+            {loadingMoreDialogs && (
+              <div className="flex justify-center py-4 text-cyan-300">
+                <LoaderCircle className="animate-spin" size={18} />
+              </div>
+            )}
           </div>
         </aside>
 
@@ -547,8 +639,26 @@ function Messenger({ status, onLoggedOut }: { status: AuthStatus; onLoggedOut: (
                 </div>
               </div>
 
-              <div ref={messagePane} className="scrollbar relative min-h-0 flex-1 overflow-y-scroll overscroll-contain px-4 py-7 sm:px-8">
+              <div
+                ref={messagePane}
+                className="scrollbar relative min-h-0 flex-1 overflow-y-scroll overscroll-contain px-4 py-7 sm:px-8"
+                onScroll={(event) => {
+                  if (
+                    event.currentTarget.scrollTop < 120
+                    && hasOlderMessages
+                    && !loadingOlderMessages
+                    && selectedRef.current
+                  ) {
+                    void loadMessages(selectedRef.current, "older");
+                  }
+                }}
+              >
                 <div className="mx-auto flex min-h-full max-w-4xl flex-col justify-end gap-2">
+                  {loadingOlderMessages && (
+                    <div className="flex justify-center py-3 text-cyan-300">
+                      <LoaderCircle className="animate-spin" size={18} />
+                    </div>
+                  )}
                   {loadingMessages ? <MessageSkeleton /> : messages.length === 0 ? (
                     <div className="m-auto flex flex-col items-center text-center text-slate-500">
                       <MessageCircle size={34} strokeWidth={1.3} />
