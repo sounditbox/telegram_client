@@ -22,6 +22,7 @@ from app.models import (
     SentMessage,
     UserInfo,
 )
+from app.storage.repository import TelegramRepository
 from app.telegram.gateway import TelegramGateway
 
 
@@ -34,14 +35,25 @@ class AccountService:
 
 
 class DialogService:
-    def __init__(self, gateway: TelegramGateway) -> None:
+    def __init__(self, gateway: TelegramGateway, repository: TelegramRepository) -> None:
         self._gateway = gateway
+        self._repository = repository
 
     async def list(self, limit: int) -> list[DialogInfo]:
-        return await self._gateway.list_dialogs(limit)
+        cached = await self._repository.list_dialogs(limit)
+        if cached:
+            return cached
+        dialogs = await self._gateway.list_dialogs(limit)
+        await self._repository.store_dialogs(dialogs)
+        return dialogs
 
     async def messages(self, chat_id: str, limit: int) -> list[MessageInfo]:
-        return await self._gateway.list_messages(chat_id, limit)
+        cached = await self._repository.list_messages(chat_id, limit)
+        if cached:
+            return cached
+        messages = await self._gateway.list_messages(chat_id, limit)
+        await self._repository.store_messages(chat_id, messages)
+        return messages
 
     async def participants(self, chat_id: str, limit: int) -> list[UserInfo]:
         return await self._gateway.list_participants(chat_id, limit)

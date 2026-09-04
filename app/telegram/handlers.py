@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 import logging
+from typing import Protocol
 
 from telethon import TelegramClient, events
 
-from app.events.broker import EventBroker
+from app.models import EventRecord
+from app.telegram.serialization import media_info
 
 
 logger = logging.getLogger(__name__)
 
 
+class EventPublisher(Protocol):
+    async def publish(self, **event: object) -> EventRecord: ...
+
+
 class TelegramEventHandlers:
-    def __init__(self, client: TelegramClient, broker: EventBroker) -> None:
+    def __init__(self, client: TelegramClient, broker: EventPublisher) -> None:
         self._client = client
         self._broker = broker
         self._registered = False
@@ -58,6 +64,7 @@ class TelegramEventHandlers:
                 or getattr(chat, "first_name", None)
                 or sender_name
             )
+            message_media = media_info(event.message)
             await self._broker.publish(
                 kind=kind,
                 message_id=event.id,
@@ -69,6 +76,9 @@ class TelegramEventHandlers:
                 sender_has_avatar=getattr(sender, "photo", None) is not None,
                 chat_title=chat_title,
                 date=event.date,
+                outgoing=bool(event.message.out),
+                has_media=message_media is not None,
+                media=message_media,
             )
             logger.info(
                 "Telegram event received: kind=%s chat_id=%s message_id=%s",

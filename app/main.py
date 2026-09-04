@@ -26,10 +26,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        await services.repository.initialize()
         await services.manager.start()
+        await services.sync.start()
         try:
             yield
         finally:
+            await services.sync.stop()
             await services.manager.stop()
 
     application = FastAPI(

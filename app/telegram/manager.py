@@ -8,7 +8,6 @@ from telethon import TelegramClient
 
 from app.core.config import Settings
 from app.core.errors import NotAuthorized, TelegramUnavailable
-from app.events.broker import EventBroker
 from app.telegram.handlers import TelegramEventHandlers
 
 
@@ -16,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramClientManager:
-    def __init__(self, settings: Settings, broker: EventBroker) -> None:
+    def __init__(self, settings: Settings, event_publisher: object) -> None:
         self._settings = settings
-        self._broker = broker
+        self._event_publisher = event_publisher
         self._client: TelegramClient | None = None
         self._handlers: TelegramEventHandlers | None = None
         self._lifecycle_lock = asyncio.Lock()
@@ -42,7 +41,7 @@ class TelegramClientManager:
                     self._settings.api_id,
                     self._settings.api_hash.get_secret_value(),
                 )
-                self._handlers = TelegramEventHandlers(self._client, self._broker)
+                self._handlers = TelegramEventHandlers(self._client, self._event_publisher)
                 self._handlers.register()
 
             if not self._client.is_connected():
